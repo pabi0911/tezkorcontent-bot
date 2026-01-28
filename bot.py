@@ -15,8 +15,7 @@ from aiogram.types import (
 import os
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN is not set")
+print("BOT_TOKEN from env =", repr(BOT_TOKEN))
 
 import sessions
 import dish_parser
