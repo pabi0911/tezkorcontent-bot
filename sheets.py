@@ -1,11 +1,26 @@
+import os
+import json
 import gspread
 from google.oauth2.service_account import Credentials
-from typing import List, Dict, Any, Optional
 
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-CREDS_FILE = "google_credentials.json"
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
+]
 
+def get_client():
+    raw = os.getenv("GOOGLE_CREDENTIALS_JSON")
+    if not raw:
+        raise RuntimeError("GOOGLE_CREDENTIALS_JSON is not set")
 
+    info = json.loads(raw)
+
+    creds = Credentials.from_service_account_info(
+        info,
+        scopes=SCOPES
+    )
+
+    return gspread.authorize(creds)
 # =========================
 # GOOGLE SHEETS CORE
 # =========================
