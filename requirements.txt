@@ -1,5 +1,6 @@
 aiogram>=3.0
 python-dotenv
+gspread
 google-auth
 google-auth-oauthlib
 google-auth-httplib2
