@@ -12,10 +12,7 @@ from aiogram.types import (
     CallbackQuery,
 )
 
-import os
-
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-print("BOT_TOKEN from env =", repr(BOT_TOKEN))
+from config import BOT_TOKEN
 
 import sessions
 import dish_parser
