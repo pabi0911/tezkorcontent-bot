@@ -12,7 +12,15 @@ from aiogram.types import (
     CallbackQuery,
 )
 
-from config import BOT_TOKEN
+import os
+
+try:
+    from config import BOT_TOKEN  # локально
+except ImportError:
+    BOT_TOKEN = os.getenv("BOT_TOKEN")  # Railway / prod
+
+if not BOT_TOKEN:
+    raise RuntimeError("BOT_TOKEN is not set")
 
 import sessions
 import dish_parser
