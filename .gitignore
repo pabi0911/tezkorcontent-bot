@@ -1,4 +1,64 @@
+# Python
 venv/
+__pycache__/
+*.pyc
+
+# Env
+.env
+
+# macOS
+.DS_Store
+
+# SSH keys
+*.key# Python
+venv/
+__pycache__/
+*.pyc
+
+# Env
+.env
+
+# macOS
+.DS_Store
+
+# SSH keys
+*.key# Python
+venv/
+__pycache__/
+*.pyc
+
+# Env
+.env
+
+# macOS
+.DS_Store
+
+# SSH keys
+*.key# Python
+venv/
+__pycache__/
+*.pyc
+
+# Env
+.env
+
+# macOS
+.DS_Store
+
+# SSH keys
+*.key# Python
+venv/
+__pycache__/
+*.pyc
+
+# Env
+.env
+
+# macOS
+.DS_Store
+
+# SSH keys
+*.keyvenv/
 __pycache__/
 *.pyc
 
@@ -19,3 +79,20 @@ __pycache__/
 # Secrets
 config.py
 google_credentials.json
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Env
+.env
+
+# macOS
+.DS_Store
+
+# SSH keys
+*.key
+
+# Secrets
+google_credentials.json
+

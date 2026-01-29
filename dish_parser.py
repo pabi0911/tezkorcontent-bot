@@ -456,6 +456,7 @@ def parse(texts: List[str]) -> Dict[str, Any]:
             if candidates:
                 candidates.sort(key=len, reverse=True)
                 result["composition"] = candidates[0].strip()
+                result["_meta"]["composition_source"] = "legacy_longest_line_fallback"
 
     # --- цены / вес (если не нашли выше) ---
     if not result["prices"] and not result["price"]:
@@ -542,6 +543,7 @@ def parse_bulk_position(texts: List[str]) -> Dict[str, Any]:
     if parsed["prices"]:
         parsed["price"] = min(p["price"] for p in parsed["prices"])
         parsed["weight"] = None
+        parsed["_meta"]["price_source"] = "multi_price_pairs"
     else:
         # ---------- SINGLE PRICE ----------
         if "price" in labeled and labeled["price"]:
