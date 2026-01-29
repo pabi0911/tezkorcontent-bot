@@ -336,6 +336,13 @@ def parse(texts: List[str]) -> Dict[str, Any]:
         "price": None,      # минимальная цена
         "prices": [],       # [{weight, price}]
         "ikpu": None,
+        "_meta": {
+            "weight_source": None,
+            "price_source": None,
+            "composition_source": None,
+            "ikpu_source": None,
+            "structured_detected": False,
+            }
     }
 
     lines = normalize_texts(texts)
@@ -344,6 +351,7 @@ def parse(texts: List[str]) -> Dict[str, Any]:
 
     labeled, remaining_lines = _extract_labeled_fields(lines)
     structured = _detect_structured(labeled, lines)
+    result["_meta"]["structured_detected"] = structured
 
     full_text = "\n".join(lines).lower()
 
@@ -351,6 +359,7 @@ def parse(texts: List[str]) -> Dict[str, Any]:
     m_any = _IKPU_ANY_RE.search("\n".join(lines))
     if m_any:
         result["ikpu"] = m_any.group(0)
+        result["_meta"]["ikpu_source"] = "detected_anywhere"
 
     # --- MULTI PRICE (вариант — цена) ---
     for line in lines:
@@ -364,6 +373,7 @@ def parse(texts: List[str]) -> Dict[str, Any]:
     if result["prices"]:
         result["price"] = min(p["price"] for p in result["prices"])
         result["weight"] = None
+        result["_meta"]["price_source"] = "multi_price_pairs"
 
     # --- цена / вес из labeled (если структурировано) ---
     if structured:
@@ -371,11 +381,13 @@ def parse(texts: List[str]) -> Dict[str, Any]:
             pv = _digits_to_int(labeled["price"])
             if pv is not None:
                 result["price"] = pv
+                result["_meta"]["price_source"] = "explicit_price_attr"
 
         if not result["weight"] and "weight" in labeled:
             mw = _WEIGHT_RE.search(labeled["weight"])
             if mw:
                 result["weight"] = mw.group(0).strip()
+                result["_meta"]["weight_source"] = "explicit_weight_attr"
 
     # --- название ---
     if "name" in labeled and labeled["name"]:
@@ -402,21 +414,26 @@ def parse(texts: List[str]) -> Dict[str, Any]:
         comp = extract_composition_from_lines(comp_block)
         if comp:
             result["composition"] = comp
+            result["_meta"]["composition_source"] = "composition_block"
+            
 
     # 2) если нет состава, но labeled composition есть
     if not result["composition"] and "composition" in labeled and labeled["composition"]:
         # может быть перечисление через пробел/запятую в одной строке
         result["composition"] = labeled["composition"].strip()
+        result["_meta"]["composition_source"] = "explicit_composition_attr"
 
     # 3) если нет состава, но есть описание — кладем в composition (чтобы не терять)
     if not result["composition"] and "description" in labeled and labeled["description"]:
         result["composition"] = labeled["description"].strip()
+        result["_meta"]["composition_source"] = "description_used_as_composition"
 
     # 4) fallback состава (со всего текста)
     if not result["composition"]:
         comp = extract_composition_from_lines(remaining_lines if structured else lines)
         if comp:
             result["composition"] = comp
+            result["_meta"]["composition_source"] = "fallback_from_text"
         else:
             # старый fallback: возьмем самую длинную "буквенную" строку, которая не похожа на цену/вес/икпу
             candidates: List[str] = []
@@ -447,6 +464,7 @@ def parse(texts: List[str]) -> Dict[str, Any]:
             mw = _WEIGHT_RE.search(full_text)
             if mw:
                 result["weight"] = mw.group(0).strip()
+                result["_meta"]["weight_source"] = "fallback_from_text"
 
         # одна цена
         candidates_int: List[int] = []
@@ -467,6 +485,7 @@ def parse(texts: List[str]) -> Dict[str, Any]:
                     candidates_int.append(pv)
         if candidates_int:
             result["price"] = min(candidates_int)
+            result["_meta"]["price_source"] = "fallback_from_text"
 
     return result
 
@@ -486,6 +505,13 @@ def parse_bulk_position(texts: List[str]) -> Dict[str, Any]:
         "price": None,
         "prices": [],
         "ikpu": None,
+        "_meta": {
+            "weight_source": None,
+            "price_source": None,
+            "composition_source": None,
+            "ikpu_source": None,
+            "structured_detected": False,
+            }
     }
 
     lines = normalize_texts(texts)
@@ -494,11 +520,13 @@ def parse_bulk_position(texts: List[str]) -> Dict[str, Any]:
 
     labeled, remaining_lines = _extract_labeled_fields(lines)
     structured = _detect_structured(labeled, lines)
+    parsed["_meta"]["structured_detected"] = structured
 
     # ---------- IKPU (17 цифр в любом месте) ----------
     m_any = _IKPU_ANY_RE.search("\n".join(lines))
     if m_any:
         parsed["ikpu"] = m_any.group(0)
+        parsed["_meta"]["ikpu_source"] = "explicit_key"
 
     # ---------- MULTI PRICE (ЛЮБОЙ АТРИБУТ — ЦЕНА) ----------
     for line in lines:
@@ -508,6 +536,8 @@ def parse_bulk_position(texts: List[str]) -> Dict[str, Any]:
         pv = _digits_to_int(m.group("price"))
         if pv is not None:
             parsed["prices"].append({"weight": m.group("label").strip(), "price": pv})
+        if parsed["prices"]:
+            parsed["_meta"]["price_source"] = "multi_price_pairs"
 
     if parsed["prices"]:
         parsed["price"] = min(p["price"] for p in parsed["prices"])
@@ -518,6 +548,7 @@ def parse_bulk_position(texts: List[str]) -> Dict[str, Any]:
             pv = _digits_to_int(labeled["price"])
             if pv is not None:
                 parsed["price"] = pv
+                parsed["_meta"]["price_source"] = "explicit_price_attr"
 
         if not parsed["price"]:
             # ищем строку-прайс
@@ -528,6 +559,7 @@ def parse_bulk_position(texts: List[str]) -> Dict[str, Any]:
                     pv = _digits_to_int(line)
                     if pv is not None:
                         parsed["price"] = pv
+                        parsed["_meta"]["price_source"] = "fallback_from_text"
                         break
 
     # --- ЯВНЫЙ ВЕС (вес 1000 / вес:1000 / weight 1kg и т.д.) ---
@@ -541,6 +573,7 @@ def parse_bulk_position(texts: List[str]) -> Dict[str, Any]:
             w = _normalize_weight_value(m.group(1))
             if w:
                 parsed["weight"] = w
+                parsed["_meta"]["weight_source"] = "explicit_weight_attr"
             break
 
     # 2. Потом — вес из labeled (если он был распознан ранее)
@@ -549,6 +582,7 @@ def parse_bulk_position(texts: List[str]) -> Dict[str, Any]:
         w = _normalize_weight_value(labeled["weight"])
         if w:
             parsed["weight"] = w
+            parsed["_meta"]["weight_source"] = "labeled_weight_block"
 
     # 3. И ТОЛЬКО если явного веса НЕ БЫЛО — подхватываем из текста (0.25л и т.п.)
     if not parsed["weight"] and not weight_key_present:
@@ -558,6 +592,7 @@ def parse_bulk_position(texts: List[str]) -> Dict[str, Any]:
             mw = _WEIGHT_RE.search(line)
             if mw:
                 parsed["weight"] = mw.group(0).strip()
+                parsed["_meta"]["weight_source"] = "fallback_from_text"
                 break
 
     # ---------- NAME ----------
@@ -586,19 +621,23 @@ def parse_bulk_position(texts: List[str]) -> Dict[str, Any]:
         comp = extract_composition_from_lines(comp_block)
         if comp:
             parsed["composition"] = comp
+            parsed["_meta"]["composition_source"] = "composition_block"
 
     # 2) labeled composition
     if not parsed["composition"] and "composition" in labeled and labeled["composition"]:
         parsed["composition"] = labeled["composition"].strip()
+        parsed["_meta"]["composition_source"] = "explicit_composition_attr"
 
     # 3) labeled description -> composition
     if not parsed["composition"] and "description" in labeled and labeled["description"]:
         parsed["composition"] = labeled["description"].strip()
+        parsed["_meta"]["composition_source"] = "description_used_as_composition"
 
     # 4) fallback
     if not parsed["composition"]:
         comp = extract_composition_from_lines(remaining_lines if structured else lines)
-        if comp:
+        if comp: 
             parsed["composition"] = comp
+            parsed["_meta"]["composition_source"] = "fallback_from_text"
 
     return parsed

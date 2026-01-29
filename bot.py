@@ -29,6 +29,46 @@ dp = Dispatcher()
 # UI
 # -------------------------
 
+def explain_meta(meta: dict) -> str:
+    lines = []
+
+    if meta.get("structured_detected"):
+        lines.append("🔍 Сообщение распознано как структурированное")
+
+    if meta.get("price_source"):
+        price_map = {
+            "multi_price_pairs": "нашел несколько вариантов цены (формат «вариант — цена»)",
+            "explicit_price_attr": "нашел цену по ключу «Цена»",
+            "fallback_from_text": "нашел цену в тексте",
+        }
+        lines.append("💰 Цена: " + price_map.get(meta["price_source"], meta["price_source"]))
+
+    if meta.get("weight_source"):
+        weight_map = {
+            "explicit_weight_attr": "нашел вес по ключу «Вес»",
+            "labeled_weight_block": "нашел вес в отдельном поле",
+            "fallback_from_text": "определил вес из текста",
+        }
+        lines.append("⚖️ Вес: " + weight_map.get(meta["weight_source"], meta["weight_source"]))
+
+    if meta.get("composition_source"):
+        comp_map = {
+            "composition_block": "взял состав из блока «Состав»",
+            "explicit_composition_attr": "взял состав из строки",
+            "description_used_as_composition": "использовал описание как состав",
+            "fallback_from_text": "собрал состав из текста",
+        }
+        lines.append("🧾 Состав: " + comp_map.get(meta["composition_source"], meta["composition_source"]))
+
+    if meta.get("ikpu_source"):
+        ikpu_map = {
+            "explicit_key": "нашел ИКПУ по ключу",
+            "detected_anywhere": "нашел ИКПУ в тексте автоматически",
+        }
+        lines.append("🏷 ИКПУ: " + ikpu_map.get(meta["ikpu_source"], "найден"))
+
+    return "\n".join(lines)
+
 def render_dish_card(parsed: Dict[str, Any], photo_count: int) -> str:
     prices_text = "—"
     if parsed.get("prices"):
@@ -304,8 +344,11 @@ async def ready_button(message: Message):
         sessions.set_parsed(message.from_user.id, parsed)
         sessions.set_mode(message.from_user.id, "edit")
 
+        card = render_dish_card(parsed, photo_count=len(s["photos"]))
+        explanation = explain_meta(parsed["_meta"])
+
         await message.answer(
-            render_dish_card(parsed, photo_count=len(s["photos"])),
+            f"{card}\n\n📌 Как я это понял:\n{explanation}",
             reply_markup=edit_keyboard
         )
         return
@@ -381,7 +424,9 @@ async def apply_edit(message: Message, edit_mode: str, parsed: Dict[str, Any]) -
             if isinstance(photo_obj, str):
                 photo_obj = {"file_id": photo_obj, "kind": "photo"}
 
-            caption = render_dish_card(parsed, photo_count=1)
+            card = render_dish_card(parsed, photo_count=1)
+            explanation = explain_meta(parsed["_meta"])
+            caption = f"{card}\n\n📌 Как я это понял:\n{explanation}"
 
             if photo_obj.get("kind") == "document":
                 await bot.send_document(
@@ -403,12 +448,15 @@ async def apply_edit(message: Message, edit_mode: str, parsed: Dict[str, Any]) -
     
     # ---------- MANUAL MODE ----------
     if s and s.get("photos"):
+        card = render_dish_card(parsed, photo_count=len(s["photos"]))
+        explanation = explain_meta(parsed["_meta"])
+
         await bot.send_photo(
             chat_id=message.chat.id,
             photo=s["photos"][0],
-            caption=render_dish_card(parsed, photo_count=len(s["photos"])),
+            caption=f"{card}\n\n📌 Как я это понял:\n{explanation}",
             reply_markup=edit_keyboard
-        )
+            )
         return
 
     # ---------- FALLBACK ----------
@@ -488,10 +536,15 @@ async def show_bulk_current(message: Message) -> None:
     sessions.set_parsed(user_id, parsed)
     sessions.bulk_set_current_parsed(user_id, parsed)
 
-    caption = "📋 Проверка позиции {i} из {t}\n\n{card}".format(
-        i=idx, t=total,
-        card=render_dish_card(parsed, photo_count=1)
+    card = render_dish_card(parsed, photo_count=1)
+    explanation = explain_meta(parsed["_meta"])
+
+    caption = (
+        f"📋 Проверка позиции {idx} из {total}\n\n"
+        f"{card}\n\n"
+        f"📌 Как я это понял:\n{explanation}"
     )
+    
 
     photo_obj = pos["photo"]
     reply_to_id = pos.get("photo_message_id")
@@ -612,16 +665,6 @@ async def collect_text(message: Message):
     if edit_mode and parsed:
         await apply_edit(message, edit_mode, parsed)
         return
-
-    # INLINE EDIT APPLY
-    s = sessions.get_session(user_id)
-    if not s:
-        return
-
-    edit_mode = s.get("edit_mode")
-    parsed = s.get("parsed")
-    if edit_mode and parsed:
-        await apply_edit(message, edit_mode, parsed)
 
 async def main():
     print("🤖 Bot started")
