@@ -397,13 +397,23 @@ def parse(texts: List[str]) -> Dict[str, Any]:
             low = line.lower().strip()
             if not low:
                 continue
-            if any(char.isdigit() for char in low):
+
+            # не берем заголовок "состав"
+            if low in KEY_ALIASES["composition"]:
                 continue
-            # не берем строки-ключи
-            if low in STOP_KEYS:
+
+            # не берем икпу / цену / пары
+            if _IKPU_ANY_RE.search(line):
                 continue
-            if any(re.match(r"^\s*{0}\s*[:—\-–]".format(re.escape(k)), low) for k in STOP_KEYS):
+            if _PRICE_LINE_RE.match(line):
                 continue
+            if _PAIR_RE.match(line):
+                continue
+
+            # цифры допустимы, если это вес
+            if any(char.isdigit() for char in low) and not _WEIGHT_RE.search(line):
+                continue
+
             result["name"] = line.strip()
             break
 
@@ -457,6 +467,8 @@ def parse(texts: List[str]) -> Dict[str, Any]:
                 candidates.sort(key=len, reverse=True)
                 result["composition"] = candidates[0].strip()
                 result["_meta"]["composition_source"] = "legacy_longest_line_fallback"
+    
+    
 
     # --- цены / вес (если не нашли выше) ---
     if not result["prices"] and not result["price"]:
@@ -487,6 +499,33 @@ def parse(texts: List[str]) -> Dict[str, Any]:
         if candidates_int:
             result["price"] = min(candidates_int)
             result["_meta"]["price_source"] = "fallback_from_text"
+            
+    # -----------------------------
+    # POST-CLEAN COMPOSITION
+    # -----------------------------
+    name = result.get("name")
+    composition = result.get("composition")
+    weight = result.get("weight")
+
+    if composition:
+        comp = composition.strip()
+
+        # 1. Убираем дублирование названия в начале состава
+        if name:
+            n = name.strip()
+            if comp.lower().startswith(n.lower()):
+                comp = comp[len(n):].lstrip(" ,.-")
+
+        # 2. Убираем вес из состава, если он найден отдельно
+        if weight:
+            comp = re.sub(
+                re.escape(weight),
+                "",
+                comp,
+                flags=re.IGNORECASE
+            ).strip(" ,.-")
+
+        result["composition"] = comp or None
 
     return result
 
@@ -606,13 +645,23 @@ def parse_bulk_position(texts: List[str]) -> Dict[str, Any]:
             low = line.lower().strip()
             if not low:
                 continue
-            if any(k == low for k in KEY_ALIASES["composition"]):
-                # не берем "состав" заголовком
+
+            # не берем заголовок "состав"
+            if low in KEY_ALIASES["composition"]:
                 continue
-            if any(char.isdigit() for char in low):
+
+            # не берем цену / икпу / пары
+            if _IKPU_ANY_RE.search(line):
                 continue
-            if any(k in low for k in STOP_KEYS):
+            if _PRICE_LINE_RE.match(line):
                 continue
+            if _PAIR_RE.match(line):
+                continue
+
+            # ВАЖНО: цифры допустимы, ЕСЛИ это вес
+            if any(char.isdigit() for char in low) and not _WEIGHT_RE.search(line):
+                continue
+
             parsed["name"] = line.strip()
             break
 
@@ -641,5 +690,32 @@ def parse_bulk_position(texts: List[str]) -> Dict[str, Any]:
         if comp: 
             parsed["composition"] = comp
             parsed["_meta"]["composition_source"] = "fallback_from_text"
+
+    # -----------------------------
+    # POST-CLEAN COMPOSITION
+    # -----------------------------
+    name = parsed.get("name")
+    composition = parsed.get("composition")
+    weight = parsed.get("weight")
+
+    if composition:
+        comp = composition.strip()
+
+        # 1. Убираем дублирование названия в начале состава
+        if name:
+            n = name.strip()
+            if comp.lower().startswith(n.lower()):
+                comp = comp[len(n):].lstrip(" ,.-")
+
+        # 2. Убираем вес из состава, если он найден отдельно
+        if weight:
+            comp = re.sub(
+                re.escape(weight),
+                "",
+                comp,
+                flags=re.IGNORECASE
+            ).strip(" ,.-")
+
+        parsed["composition"] = comp or None
 
     return parsed
