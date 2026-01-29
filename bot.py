@@ -1,5 +1,6 @@
 import asyncio
 import re
+import os
 from typing import Dict, Any, List, Optional
 
 from aiogram import Bot, Dispatcher, F
@@ -12,8 +13,7 @@ from aiogram.types import (
     CallbackQuery,
 )
 
-import os
-
+# --- BOT TOKEN ---
 try:
     from config import BOT_TOKEN  # локально
 except ImportError:
@@ -22,6 +22,7 @@ except ImportError:
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is not set")
 
+# --- local imports ---
 import sessions
 import dish_parser
 import sheets
