@@ -1,8 +1,25 @@
+import os
 import json
 import gspread
 from google.oauth2.service_account import Credentials
 
-from config import GOOGLE_CREDENTIALS_JSON
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
+]
+
+
+def get_client():
+    raw = os.getenv("GOOGLE_CREDENTIALS_JSON")
+    if not raw:
+        raise RuntimeError("GOOGLE_CREDENTIALS_JSON is not set")
+
+    info = json.loads(raw)
+
+    creds = Credentials.from_service_account_info(
+        info,
+        scopes=SCOPES
+    )
 
     return gspread.authorize(creds)
 
@@ -13,25 +30,21 @@ def open_sheet_by_url(sheet_url: str):
     return spreadsheet.sheet1
 
 
-# =========================
-# FIXED EXPORT LOGIC
-# =========================
-
-def build_fixed_row(values: Dict[str, Any]) -> List[Any]:
-    return [
-        values.get("Позиция", ""),
-        values.get("Описание", ""),
-        values.get("Цена", ""),
-        values.get("Вес", ""),
-        values.get("Код ИКПУ", ""),
-        values.get("Картинка", ""),
-    ]
-
-
-def export_rows(sheet_url: str, items: List[Dict[str, Any]]) -> None:
+def export_rows(sheet_url: str, items):
     if not items:
         return
 
     sheet = open_sheet_by_url(sheet_url)
-    rows = [build_fixed_row(it) for it in items]
+    rows = []
+
+    for it in items:
+        rows.append([
+            it.get("Позиция", ""),
+            it.get("Описание", ""),
+            it.get("Цена", ""),
+            it.get("Вес", ""),
+            it.get("Код ИКПУ", ""),
+            it.get("Картинка", ""),
+        ])
+
     sheet.append_rows(rows, value_input_option="USER_ENTERED")
